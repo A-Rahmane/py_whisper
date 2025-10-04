@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  transcription:
+    build: .
+    container_name: transcription-service
+    ports:
+      - "8000:8000"
+    environment:
+      - WHISPER_MODEL=base
+      - WHISPER_DEVICE=cpu
+      - WHISPER_COMPUTE_TYPE=int8
+      - LOG_LEVEL=INFO
+      - MAX_FILE_SIZE=1073741824
+      - TEMP_DIR=/tmp/transcription
+    volumes:
+      - ./models:/models
+      - ./temp:/tmp/transcription
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health/live')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
