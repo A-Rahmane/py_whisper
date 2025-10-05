@@ -1,11 +1,20 @@
 """Pytest configuration and fixtures."""
-
 import pytest
 import tempfile
 from pathlib import Path
 from fastapi.testclient import TestClient
 from app.main import app
 from app.config import settings
+
+
+def pytest_addoption(parser):
+    """Add custom pytest options."""
+    parser.addoption(
+        "--run-async",
+        action="store_true",
+        default=False,
+        help="Run async integration tests (requires Redis and Celery)"
+    )
 
 
 @pytest.fixture
@@ -24,19 +33,16 @@ def temp_dir():
 @pytest.fixture
 def sample_audio_path(temp_dir):
     """Create a minimal valid WAV file for testing."""
-    # Create a minimal WAV file (1 second of silence at 16kHz)
     import wave
     import struct
     
     wav_path = temp_dir / "test_audio.wav"
     
     with wave.open(str(wav_path), 'w') as wav_file:
-        # Set parameters: 1 channel, 2 bytes per sample, 16kHz
         wav_file.setnchannels(1)
         wav_file.setsampwidth(2)
         wav_file.setframerate(16000)
         
-        # Write 1 second of silence (16000 samples of value 0)
         for _ in range(16000):
             wav_file.writeframes(struct.pack('h', 0))
     
@@ -57,8 +63,33 @@ def sample_audio_bytes():
         wav_file.setsampwidth(2)
         wav_file.setframerate(16000)
         
-        for _ in range(16000):  # 1 second
+        for _ in range(16000):
             wav_file.writeframes(struct.pack('h', 0))
     
     buffer.seek(0)
     return buffer.read()
+
+
+@pytest.fixture(scope="session")
+def redis_available():
+    """Check if Redis is available for testing."""
+    try:
+        from app.core.redis_client import redis_client
+        redis_client.connect()
+        is_available = redis_client.is_connected()
+        redis_client.disconnect()
+        return is_available
+    except:
+        return False
+
+
+@pytest.fixture(scope="session")
+def celery_available():
+    """Check if Celery worker is available for testing."""
+    try:
+        from tasks.celery_app import celery_app
+        inspect = celery_app.control.inspect()
+        workers = inspect.active()
+        return workers is not None and len(workers) > 0
+    except:
+        return False
