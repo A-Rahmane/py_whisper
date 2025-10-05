@@ -17,3 +17,8 @@ aiofiles==24.1.0
 
 # Monitoring
 prometheus-client==0.20.0
+
+# Task Queue (Phase 2)
+celery==5.4.0
+redis==5.0.8
+flower==2.0.1

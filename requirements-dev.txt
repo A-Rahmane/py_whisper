@@ -12,3 +12,7 @@ mypy==1.8.0
 
 # Development
 ipython==8.20.0
+
+# Testing async
+pytest-celery==0.0.0
+fakeredis==2.20.0

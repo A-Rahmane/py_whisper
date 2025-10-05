@@ -8,8 +8,9 @@ from datetime import datetime
 
 from app.config import settings
 from app.core.logging import logger, setup_logging
-from app.api.routes import transcription, health, models
+from app.api.routes import transcription, health, models, jobs
 from app.core.transcription.engine import whisper_engine
+from app.core.redis_client import redis_client
 
 
 @asynccontextmanager
@@ -22,6 +23,17 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
     logger.info(f"Configuration: model={settings.whisper_model}, device={settings.whisper_device}")
+    logger.info(f"Async processing: {'enabled' if settings.enable_async else 'disabled'}")
+    
+    # Connect to Redis if async is enabled
+    if settings.enable_async:
+        try:
+            logger.info("Connecting to Redis...")
+            redis_client.connect()
+            logger.info("Redis connected successfully")
+        except Exception as e:
+            logger.error(f"Failed to connect to Redis: {e}")
+            logger.warning("Async processing will not be available")
     
     # Preload default model
     try:
@@ -40,13 +52,21 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down service...")
+    
+    # Disconnect from Redis
+    if settings.enable_async:
+        try:
+            redis_client.disconnect()
+            logger.info("Redis disconnected")
+        except Exception as e:
+            logger.error(f"Error disconnecting from Redis: {e}")
 
 
 # Create FastAPI application
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Whisper-based audio/video transcription microservice",
+    description="Whisper-based audio/video transcription microservice with async support",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc"
@@ -143,6 +163,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(health.router)
 app.include_router(transcription.router)
 app.include_router(models.router)
+app.include_router(jobs.router)
 
 
 # Root endpoint
@@ -153,6 +174,7 @@ async def root():
         "service": settings.app_name,
         "version": settings.app_version,
         "status": "running",
+        "async_enabled": settings.enable_async,
         "docs": "/docs",
         "health": "/health"
     }

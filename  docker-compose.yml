@@ -1,9 +1,28 @@
 version: '3.8'
 
 services:
-  transcription:
+  # Redis for job queue and results
+  redis:
+    image: redis:7-alpine
+    container_name: transcription-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - transcription-network
+
+  # Main FastAPI application
+  transcription-api:
     build: .
-    container_name: transcription-service
+    container_name: transcription-api
     ports:
       - "8000:8000"
     environment:
@@ -13,9 +32,17 @@ services:
       - LOG_LEVEL=INFO
       - MAX_FILE_SIZE=1073741824
       - TEMP_DIR=/tmp/transcription
+      - ENABLE_ASYNC=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
     volumes:
       - ./models:/models
-      - ./temp:/tmp/transcription
+      - shared-temp:/tmp/transcription
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health/live')"]
@@ -23,3 +50,63 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    networks:
+      - transcription-network
+
+  # Celery worker for async transcription
+  transcription-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: transcription-worker
+    environment:
+      - WHISPER_MODEL=base
+      - WHISPER_DEVICE=cpu
+      - WHISPER_COMPUTE_TYPE=int8
+      - LOG_LEVEL=INFO
+      - TEMP_DIR=/tmp/transcription
+      - ENABLE_ASYNC=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - ./models:/models
+      - shared-temp:/tmp/transcription
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
+    networks:
+      - transcription-network
+    deploy:
+      replicas: 2
+
+  # Flower for monitoring Celery (optional)
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: transcription-flower
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis
+    restart: unless-stopped
+    command: celery -A tasks.celery_app flower --port=5555
+    networks:
+      - transcription-network
+
+volumes:
+  redis-data:
+    driver: local
+  shared-temp:
+    driver: local
+
+networks:
+  transcription-network:
+    driver: bridge
