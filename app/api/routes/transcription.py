@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api/v1", tags=["transcription"])
     
     **Limits:**
     - Maximum file size: 1GB
-    - Maximum duration: 3 hours
+    - Maximum duration: one hour
     
     **Note:** For files longer than 10 minutes, consider using the async endpoint.
     """,
@@ -148,7 +148,7 @@ async def transcribe(
     
     **Limits:**
     - Maximum file size: 1GB
-    - Maximum duration: 3 hours
+    - Maximum duration: one hour
     
     **Recommended for:**
     - Files longer than 10 minutes

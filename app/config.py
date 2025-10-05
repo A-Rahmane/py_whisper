@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     whisper_model_dir: str = "./models"
     
     # File Processing
-    max_file_size: int = 1073741824  # 1GB
-    max_duration: int = 10800  # 3 hours
+    max_file_size: int = 1_073_741_824  # 1GB
+    max_duration: int = 3600  # an hour
     temp_dir: str = "./temp"
     cleanup_interval: int = 3600
     
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     enable_rate_limit: bool = True
     rate_limit_per_minute: int = 30
     
-    # Async Processing (Phase 2)
+    # Async Processing
     enable_async: bool = True
     redis_host: str = "localhost"
     redis_port: int = 6379

@@ -419,7 +419,7 @@ httpx==0.27.0
 
 #### File Constraints
 - **Max File Size**: 1 GB (configurable via environment variable)
-- **Max Duration**: 3 hours (configurable)
+- **Max Duration**: 1 hour (configurable)
 - **Min Duration**: 0.1 seconds
 - **Sample Rate**: Auto-converted to 16kHz (Whisper requirement)
 - **Channels**: Mono (auto-converted from stereo)
@@ -740,7 +740,7 @@ WHISPER_MODEL_DIR=/models
 
 # File Processing
 MAX_FILE_SIZE=1073741824        # 1GB in bytes
-MAX_DURATION=10800              # 3 hours in seconds
+MAX_DURATION=3600              # 1 hour in seconds
 TEMP_DIR=/tmp/transcription
 CLEANUP_INTERVAL=3600           # 1 hour
 
@@ -1676,7 +1676,7 @@ repos:
     - Video: MP4, WebM, AVI, MOV, MKV
     
     Maximum file size: 1GB
-    Maximum duration: 3 hours
+    Maximum duration: 1 hour
     """,
     responses={
         200: {

@@ -11,52 +11,27 @@ router = APIRouter(prefix="/api/v1", tags=["models"])
 
 # Model information
 MODELS_INFO = [
-    {
-        "name": "tiny",
-        "size": "75 MB",
-        "speed": "32x",
-        "accuracy": "Basic"
-    },
-    {
-        "name": "base",
-        "size": "142 MB",
-        "speed": "16x",
-        "accuracy": "Good"
-    },
-    {
-        "name": "small",
-        "size": "466 MB",
-        "speed": "6x",
-        "accuracy": "Better"
-    },
-    {
-        "name": "medium",
-        "size": "1.5 GB",
-        "speed": "2x",
-        "accuracy": "High"
-    },
-    {
-        "name": "large-v3",
-        "size": "2.9 GB",
-        "speed": "1x",
-        "accuracy": "Best"
-    }
+    { "name": "tiny",     "size":  "75 MB",  "speed": "32x",  "accuracy": "Basic" },
+    { "name": "base",     "size": "142 MB",  "speed": "16x",  "accuracy": "Good" },
+    { "name": "small",    "size": "466 MB",  "speed":  "6x",  "accuracy": "Better" },
+    { "name": "medium",   "size": "1.5 GB",  "speed":  "2x",  "accuracy": "High" },
+    { "name": "large-v3", "size": "2.9 GB",  "speed":  "1x",  "accuracy": "Best" }
 ]
 
 
 # Supported languages (subset of most common)
 LANGUAGES = [
+    {"code": "ar", "name": "Arabic"},
+    {"code": "fr", "name": "French"},
     {"code": "en", "name": "English"},
     {"code": "es", "name": "Spanish"},
-    {"code": "fr", "name": "French"},
-    {"code": "de", "name": "German"},
     {"code": "it", "name": "Italian"},
+    {"code": "de", "name": "German"},
     {"code": "pt", "name": "Portuguese"},
     {"code": "ru", "name": "Russian"},
     {"code": "zh", "name": "Chinese"},
     {"code": "ja", "name": "Japanese"},
     {"code": "ko", "name": "Korean"},
-    {"code": "ar", "name": "Arabic"},
     {"code": "hi", "name": "Hindi"},
     {"code": "nl", "name": "Dutch"},
     {"code": "pl", "name": "Polish"},
