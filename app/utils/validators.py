@@ -145,9 +145,9 @@ async def validate_upload_file(file: UploadFile) -> Tuple[str, int]:
     validate_mime_type(file.content_type)
     
     # Get file size
-    await file.seek(0, 2)  # Seek to end
-    file_size = await file.tell()
-    await file.seek(0)  # Reset to beginning
+    file.file.seek(0, 2)  # Move to end of file
+    file_size = file.file.tell()  # Get current position (end = total size)
+    file.file.seek(0)  # Reset to start
     
     # Validate size
     validate_file_size(file_size)
