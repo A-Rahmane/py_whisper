@@ -4,7 +4,7 @@ services:
   # Redis for job queue and results
   redis:
     image: redis:7-alpine
-    container_name: transcription-redis
+  # container_name: transcription-redis
     ports:
       - "6379:6379"
     volumes:
@@ -22,7 +22,7 @@ services:
   # Main FastAPI application
   transcription-api:
     build: .
-    container_name: transcription-api
+  # container_name: transcription-api
     ports:
       - "8000:8000"
     environment:
@@ -58,7 +58,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    container_name: transcription-worker
+  # container_name: transcription-worker
     environment:
       - WHISPER_MODEL=base
       - WHISPER_DEVICE=cpu
@@ -88,7 +88,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    container_name: transcription-flower
+  # container_name: transcription-flower
     ports:
       - "5555:5555"
     environment:
