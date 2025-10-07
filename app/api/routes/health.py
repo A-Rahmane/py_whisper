@@ -164,7 +164,7 @@ def _check_celery_workers() -> Optional[bool]:
     """Check if Celery workers are available."""
     # Can't check workers without Redis
     if not redis_client.available:
-        return None
+        return True
     
     try:
         from tasks.celery_app import celery_app
