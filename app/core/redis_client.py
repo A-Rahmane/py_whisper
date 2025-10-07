@@ -4,89 +4,114 @@ import json
 import time
 import threading
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime,timezone
 from app.config import settings
 from app.core.logging import logger
 from app.models.job import JobStatus, JobInfo
 
 
 class RedisClient:
-    """Redis client wrapper for job management."""
+    """Thread-safe Redis client wrapper with self-healing."""
     
     def __init__(self):
         """Initialize Redis client."""
         self._client: Optional[redis.Redis] = None
-        self._available = False
+        self._available_event = threading.Event()
         self._lock = threading.Lock()
-
+        self._last_check = 0
+        self._check_interval = 30  # seconds
+        self._reconnect_attempts = 0
+    
     @property
     def available(self) -> bool:
-        """Thread-safe availability check."""
+        """Check if Redis is available (with caching)."""
+        now = time.time()
+        
+        # Use cached status if recent
+        if now - self._last_check < self._check_interval:
+            return self._available_event.is_set()
+        
+        # Perform live check
         with self._lock:
-            return self._available
-    
-    @available.setter
-    def available(self, value: bool):
-        """Thread-safe availability setter."""
-        with self._lock:
-            self._available = value
-
-    
-    def connect(self, retries: int = 3, delay: int = 2) -> redis.Redis | None:
-        """Establish a Redis connection with retry logic."""
-        if self._client is not None:
-            return self._client
-
-        for attempt in range(1, retries + 1):
+            self._last_check = now
             try:
-                self._client = redis.Redis(
-                    host=settings.redis_host,
-                    port=settings.redis_port,
-                    db=settings.redis_db,
-                    password=settings.redis_password,
-                    decode_responses=True,
-                    socket_timeout=5,
-                    socket_connect_timeout=5,
-                    retry_on_timeout=True
-                )
-                # Test connection
-                self._client.ping()
-                logger.info("Connected to Redis successfully")
-                self.available = True
-                return self._client
-
-            except Exception as e:
-                logger.warning(f"Redis connection attempt {attempt}/{retries} failed: {e}")
-                if attempt < retries:
-                    time.sleep(delay)
+                if self._client is not None:
+                    self._client.ping()
+                    if not self._available_event.is_set():
+                        logger.info("Redis connection restored")
+                        self._reconnect_attempts = 0
+                    self._available_event.set()
                 else:
-                    logger.error("All Redis connection attempts failed")
-
-        self.available = False
-        self._client = None
-        return None
+                    self._available_event.clear()
+            except Exception as e:
+                if self._available_event.is_set():
+                    logger.warning(f"Redis connection lost: {e}")
+                self._available_event.clear()
+        
+        return self._available_event.is_set()
     
-    @property
-    def client(self) -> redis.Redis:
-        """Get Redis client."""
-        if self._client is None:
-            return self.connect()
-        return self._client
+    def connect(self, retries: int = 3, delay: int = 2) -> Optional[redis.Redis]:
+        """Establish Redis connection with retry logic."""
+        with self._lock:
+            if self._client is not None and self._available_event.is_set():
+                return self._client  # Already connected
+            
+            for attempt in range(1, retries + 1):
+                try:
+                    self._client = redis.Redis(
+                        host=settings.redis_host,
+                        port=settings.redis_port,
+                        db=settings.redis_db,
+                        password=settings.redis_password,
+                        decode_responses=True,
+                        socket_timeout=5,
+                        socket_connect_timeout=5,
+                        retry_on_timeout=True
+                    )
+                    
+                    # Test connection
+                    self._client.ping()
+                    
+                    logger.info(f"Connected to Redis successfully (attempt {attempt}/{retries})")
+                    self._available_event.set()
+                    self._reconnect_attempts = 0
+                    return self._client
+                    
+                except Exception as e:
+                    logger.warning(f"Redis connection attempt {attempt}/{retries} failed: {e}")
+                    if attempt < retries:
+                        time.sleep(delay * attempt)  # Exponential backoff
+                    else:
+                        logger.error("All Redis connection attempts failed")
+                        self._available_event.clear()
+                        self._client = None
+                        self._reconnect_attempts += 1
+            
+            return None
     
     def disconnect(self):
         """Disconnect from Redis."""
-        if self._client:
-            self._client.close()
-            self._client = None
-            logger.info("Disconnected from Redis")
+        with self._lock:
+            if self._client:
+                try:
+                    self._client.close()
+                except:
+                    pass
+                self._client = None
+                self._available_event.clear()
+                logger.info("Disconnected from Redis")
     
     def is_connected(self) -> bool:
-        """Check if Redis is connected."""
-        try:
-            return self._client is not None and self._client.ping()
-        except:
-            self.available = False
-            return False
+        """Check if Redis is connected (uses cached status)."""
+        return self.available
+    
+    def get_stats(self) -> dict:
+        """Get connection statistics."""
+        return {
+            "available": self.available,
+            "reconnect_attempts": self._reconnect_attempts,
+            "last_check": datetime.fromtimestamp(self._last_check, tz=timezone.utc).isoformat()
+        }
     
     # Job Management Methods
     

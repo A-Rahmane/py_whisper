@@ -5,53 +5,39 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 from datetime import datetime
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import asyncio
 
 from app.config import settings
 from app.core.logging import logger, setup_logging
 from app.api.routes import transcription, health, models, jobs
 from app.core.transcription.engine import whisper_engine
 from app.core.redis_client import redis_client
+from app.core.background_tasks import background_monitor
 
-
-scheduler = AsyncIOScheduler()
-
-@scheduler.scheduled_job('interval', minutes=5)
-def redis_health_check():
-    """Periodically check and reconnect to Redis if down."""
-    if settings.enable_async and not redis_client.available:
-        logger.info("Redis unavailable, attempting reconnection...")
-        redis_client.connect()
-        if redis_client.available:
-            logger.info("Redis reconnected successfully")
-        else:
-            logger.warning("Redis reconnection failed, will retry later")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Application lifespan manager.
-    
-    Handles startup and shutdown events.
-    """
+    """Application lifespan manager."""
     # Startup
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info(f"Configuration: model={settings.whisper_model}, device={settings.whisper_device}")
-    logger.info(f"Async processing: {'enabled' if settings.enable_async else 'disabled'}")
     
-    # Connect to Redis if async is enabled
+    # Connect to Redis with extended retries during startup
     if settings.enable_async:
-        scheduler.start() 
         try:
-            logger.info("Connecting to Redis...")
-            redis_client.connect()
-            logger.info("Redis connected successfully")
+            logger.info("Connecting to Redis (startup warm-up)...")
+            redis_client.connect(retries=10, delay=3)
+            
+            if redis_client.available:
+                logger.info("Redis connected successfully")
+            else:
+                logger.warning("Redis unavailable at startup - async features disabled")
+                logger.info("Background monitor will retry connection periodically")
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
-            logger.warning("Async processing will not be available")
     
-    # Preload default model
+    # Start background health monitor
+    await background_monitor.start()
+    
+    # Preload model
     try:
         logger.info("Preloading Whisper model...")
         whisper_engine.model_manager.preload_model(
@@ -62,19 +48,19 @@ async def lifespan(app: FastAPI):
         logger.info("Model preloaded successfully")
     except Exception as e:
         logger.error(f"Failed to preload model: {e}")
-        logger.warning("Service will load model on first request")
     
     yield
     
     # Shutdown
     logger.info("Shutting down service...")
     
+    # Stop background monitor
+    await background_monitor.stop()
+    
     # Disconnect from Redis
     if settings.enable_async:
-        scheduler.shutdown()
         try:
             redis_client.disconnect()
-            logger.info("Redis disconnected")
         except Exception as e:
             logger.error(f"Error disconnecting from Redis: {e}")
 

@@ -1,7 +1,8 @@
 """Health check API routes."""
-from fastapi import APIRouter, Response, status
+from typing import Optional
+from fastapi import APIRouter, Response, logger, status
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 from app.config import settings
 from app.models.responses import HealthResponse
@@ -28,7 +29,8 @@ async def metrics():
 async def health_check():
     """Global service health report."""
     uptime = time.time() - _start_time
-
+    
+    # Perform all checks
     checks = {
         "model_loaded": whisper_engine.model_manager.is_model_loaded(
             settings.whisper_model,
@@ -39,21 +41,33 @@ async def health_check():
         "redis_connected": _check_redis() if settings.enable_async else None,
         "celery_workers": _check_celery_workers() if settings.enable_async else None,
     }
-
-    # Health classification
-    if all(v is True or v is None for v in checks.values()):
-        service_status = "healthy"
-    elif checks.get("redis_connected") is False or checks.get("celery_workers") is False:
-        service_status = "degraded"  # partial feature loss
+    
+    # Critical checks (required for core functionality)
+    critical_checks = {
+        "model_loaded": checks["model_loaded"],
+        "temp_dir_writable": checks["temp_dir_writable"]
+    }
+    
+    # Optional checks (only affect async features)
+    optional_checks = {
+        "redis_connected": checks["redis_connected"],
+        "celery_workers": checks["celery_workers"]
+    }
+    
+    # Determine overall status
+    if not all(v is True for v in critical_checks.values()):
+        service_status = "unhealthy"  # Critical components failed
+    elif any(v is False for v in optional_checks.values() if v is not None):
+        service_status = "degraded"  # Optional features unavailable
     else:
-        service_status = "unhealthy"
+        service_status = "healthy"  # All systems operational
     
     return HealthResponse(
         status=service_status,
         version=settings.app_version,
         model=settings.whisper_model,
         device=settings.whisper_device,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         uptime_seconds=uptime,
         checks=checks
     )
@@ -146,12 +160,17 @@ def _check_redis() -> bool:
         return False
 
 
-def _check_celery_workers() -> bool:
+def _check_celery_workers() -> Optional[bool]:
     """Check if Celery workers are available."""
+    # Can't check workers without Redis
+    if not redis_client.available:
+        return None
+    
     try:
         from tasks.celery_app import celery_app
         inspect = celery_app.control.inspect()
         workers = inspect.active()
-        return bool(workers) # same as:  workers is not None and len(workers) > 0
-    except:
+        return workers is not None and len(workers) > 0
+    except Exception as e:
+        logger.debug(f"Celery worker check failed: {e}")
         return False

@@ -1,7 +1,7 @@
 """FastAPI dependencies."""
 from fastapi import Request, HTTPException, status
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 from app.config import settings
 from app.core.logging import logger
@@ -84,16 +84,17 @@ def ensure_async_available():
             detail={
                 "error": "service_unavailable",
                 "message": "Asynchronous processing is disabled in configuration",
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         )
-
+    
     if not redis_client.available:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "error": "service_unavailable",
-                "message": "Job queue (Redis) is currently unavailable",
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "message": "Job queue (Redis) is currently unavailable. The system is attempting to reconnect.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "retry_after": 60  # Hint to client
             }
         )
