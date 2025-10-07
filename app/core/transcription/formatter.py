@@ -81,12 +81,12 @@ class OutputFormatter:
         Returns:
             Formatted timestamp
         """
-        td = timedelta(seconds=seconds)
-        hours = td.seconds // 3600
-        minutes = (td.seconds % 3600) // 60
-        secs = td.seconds % 60
-        millis = td.microseconds // 1000
-        
+        total_seconds = int(seconds)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        secs = total_seconds % 60
+        millis = int((seconds - total_seconds) * 1000)
+    
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
     @staticmethod
@@ -100,10 +100,10 @@ class OutputFormatter:
         Returns:
             Formatted timestamp
         """
-        td = timedelta(seconds=seconds)
-        hours = td.seconds // 3600
-        minutes = (td.seconds % 3600) // 60
-        secs = td.seconds % 60
-        millis = td.microseconds // 1000
+        total_seconds = int(seconds)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        secs = total_seconds % 60
+        millis = int((seconds - total_seconds) * 1000)
         
         return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"

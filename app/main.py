@@ -5,6 +5,8 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 from datetime import datetime
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import asyncio
 
 from app.config import settings
 from app.core.logging import logger, setup_logging
@@ -12,6 +14,19 @@ from app.api.routes import transcription, health, models, jobs
 from app.core.transcription.engine import whisper_engine
 from app.core.redis_client import redis_client
 
+
+scheduler = AsyncIOScheduler()
+
+@scheduler.scheduled_job('interval', minutes=5)
+def redis_health_check():
+    """Periodically check and reconnect to Redis if down."""
+    if settings.enable_async and not redis_client.available:
+        logger.info("Redis unavailable, attempting reconnection...")
+        redis_client.connect()
+        if redis_client.available:
+            logger.info("Redis reconnected successfully")
+        else:
+            logger.warning("Redis reconnection failed, will retry later")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,6 +42,7 @@ async def lifespan(app: FastAPI):
     
     # Connect to Redis if async is enabled
     if settings.enable_async:
+        scheduler.start() 
         try:
             logger.info("Connecting to Redis...")
             redis_client.connect()
@@ -55,6 +71,7 @@ async def lifespan(app: FastAPI):
     
     # Disconnect from Redis
     if settings.enable_async:
+        scheduler.shutdown()
         try:
             redis_client.disconnect()
             logger.info("Redis disconnected")

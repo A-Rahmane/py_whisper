@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     
     # File Processing
     max_file_size: int = 1_073_741_824  # 1GB
-    max_duration: int = 3600  # an hour
+    max_duration: int = 3600  # 1 hour
     temp_dir: str = "./temp"
     cleanup_interval: int = 3600
     

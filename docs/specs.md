@@ -788,7 +788,7 @@ class Settings(BaseSettings):
     
     # File Processing
     max_file_size: int = 1073741824
-    max_duration: int = 10800
+    max_duration: int = 3600
     temp_dir: str = "/tmp/transcription"
     cleanup_interval: int = 3600
     

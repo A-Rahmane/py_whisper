@@ -18,7 +18,7 @@ from app.models.responses import TranscriptionResponse, ErrorResponse
 from app.models.job import JobSubmitResponse, JobStatus
 from app.services.transcription_service import transcription_service
 from app.services.job_service import job_service
-from app.api.dependencies import check_rate_limit
+from app.api.dependencies import check_rate_limit, ensure_async_available
 from app.utils.validators import validate_upload_file
 from app.utils.file_handler import SecureFileHandler
 
@@ -161,7 +161,7 @@ async def transcribe(
         413: {"model": ErrorResponse},
         503: {"model": ErrorResponse}
     },
-    dependencies=[Depends(check_rate_limit)]
+    dependencies=[Depends(check_rate_limit), Depends(ensure_async_available)]
 )
 async def transcribe_async(
     file: UploadFile = File(..., description="Audio/video file to transcribe"),

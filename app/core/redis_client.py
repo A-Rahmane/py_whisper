@@ -1,8 +1,10 @@
 """Redis client for job management."""
 import redis
 import json
+import time
+import threading
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime
 from app.config import settings
 from app.core.logging import logger
 from app.models.job import JobStatus, JobInfo
@@ -14,10 +16,28 @@ class RedisClient:
     def __init__(self):
         """Initialize Redis client."""
         self._client: Optional[redis.Redis] = None
+        self._available = False
+        self._lock = threading.Lock()
+
+    @property
+    def available(self) -> bool:
+        """Thread-safe availability check."""
+        with self._lock:
+            return self._available
     
-    def connect(self) -> redis.Redis:
-        """Connect to Redis."""
-        if self._client is None:
+    @available.setter
+    def available(self, value: bool):
+        """Thread-safe availability setter."""
+        with self._lock:
+            self._available = value
+
+    
+    def connect(self, retries: int = 3, delay: int = 2) -> redis.Redis | None:
+        """Establish a Redis connection with retry logic."""
+        if self._client is not None:
+            return self._client
+
+        for attempt in range(1, retries + 1):
             try:
                 self._client = redis.Redis(
                     host=settings.redis_host,
@@ -32,11 +52,19 @@ class RedisClient:
                 # Test connection
                 self._client.ping()
                 logger.info("Connected to Redis successfully")
+                self.available = True
+                return self._client
+
             except Exception as e:
-                logger.error(f"Failed to connect to Redis: {e}")
-                raise
-        
-        return self._client
+                logger.warning(f"Redis connection attempt {attempt}/{retries} failed: {e}")
+                if attempt < retries:
+                    time.sleep(delay)
+                else:
+                    logger.error("All Redis connection attempts failed")
+
+        self.available = False
+        self._client = None
+        return None
     
     @property
     def client(self) -> redis.Redis:
@@ -57,6 +85,7 @@ class RedisClient:
         try:
             return self._client is not None and self._client.ping()
         except:
+            self.available = False
             return False
     
     # Job Management Methods
